@@ -1,17 +1,25 @@
-int deger = 0;
-float voltaj = 0.0;
+#include <SoftwareSerial.h>
+#include <TinyGPS++.h>
+
+SoftwareSerial gpsSerial(4, 3); // RX, TX
+TinyGPSPlus gps;
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(9600);       // Arduino seri port hızı
+  gpsSerial.begin(9600);    // GPS modülü seri port hızı
 }
 
 void loop() {
-  deger = analogRead(A0);  // A0 pininden analog değer oku
-  voltaj = deger * 0.0048;  // Voltajı hesapla
-  Serial.print("Okunan Deger: ");
-  Serial.print(deger);
-  Serial.print(" - Voltaj: ");
-  Serial.print(voltaj);
-  Serial.println(" V");
-  delay(1000);
+  while (gpsSerial.available() > 0) {
+    if (gps.encode(gpsSerial.read())) {
+      if (gps.location.isUpdated()) {
+        float latitude = gps.location.lat();
+        float longitude = gps.location.lng();
+        Serial.print("LAT: ");
+        Serial.print(latitude, 6);
+        Serial.print(", LNG: ");
+        Serial.println(longitude, 6);
+      }
+    }
+  }
 }
