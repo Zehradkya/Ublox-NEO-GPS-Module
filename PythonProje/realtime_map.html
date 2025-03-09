@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GPS Navigasyon Haritası</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css">
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <style>
+        #map {
+            height: 500px;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .form-container {
+            margin-bottom: 20px;
+        }
+        .info-container {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .target-coordinates {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>GPS Navigasyon Haritası</h1>
+    <div id="map"></div>
+    <div class="form-container">
+        <label for="mapTheme">Harita Teması:</label>
+        <select id="mapTheme">
+            <option value="osm">Standart (OpenStreetMap)</option>
+            <option value="satellite">Uydu Görünümü</option>
+            <option value="dark">Karanlık Tema</option>
+        </select>
+    </div>
+    <div class="info-container">
+        <strong>Rota Bilgileri:</strong>
+        <p id="routeInfo">Henüz bir rota hesaplanmadı.</p>
+        <div class="target-coordinates">
+            <strong>Hedef Koordinatlar:</strong>
+            <p id="targetCoordinates">Henüz seçilmedi.</p>
+        </div>
+    </div>
+
+    <script>
+        var map = L.map('map').setView([41.074047, 31.156808], 13); // Varsayılan konum
+        var currentMarker = L.marker([41.074047, 31.156808], {icon: L.AwesomeMarkers.icon({icon: 'location-arrow', markerColor: 'green', prefix: 'fa'})}).addTo(map); // Mevcut konum marker'ı
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 18,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        // Tema seçenekleri
+        var themes = {
+            osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }),
+            satellite: L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { maxZoom: 18, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'] }),
+            dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 18 })
+        };
+
+        // Varsayılan tema
+        themes.osm.addTo(map);
+
+        // Tema değiştirme
+        document.getElementById('mapTheme').addEventListener('change', function (e) {
+            var selectedTheme = e.target.value;
+            map.eachLayer(function (layer) {
+                if (layer instanceof L.TileLayer) {
+                    map.removeLayer(layer);
+                }
+            });
+            themes[selectedTheme].addTo(map);
+        });
+
+        var routingControl = null;
+
+        // GPS verilerini oku ve haritayı güncelle
+        setInterval(() => {
+            fetch('gps_data.txt')
+                .then(response => response.text())
+                .then(data => {
+                    const [latitude, longitude] = data.replace('LAT:', '').replace('LNG:', '').split(',').map(Number);
+                    map.setView([latitude, longitude], 13);
+                    currentMarker.setLatLng([latitude, longitude])
+                          .bindPopup(`Mevcut Konum: Enlem: ${latitude}, Boylam: ${longitude}`).openPopup();
+                })
+                .catch(err => console.error("GPS verileri yüklenemedi: ", err));
+        }, 1000);
+
+        // Haritaya tıklama ile rota hesaplama
+        map.on('click', function (e) {
+            var latitude = e.latlng.lat;
+            var longitude = e.latlng.lng;
+
+            document.getElementById('targetCoordinates').textContent = `Enlem: ${latitude.toFixed(6)}, Boylam: ${longitude.toFixed(6)}`;
+
+            if (routingControl) {
+                map.removeControl(routingControl);
+            }
+
+            routingControl = L.Routing.control({
+                waypoints: [
+                    L.latLng(currentMarker.getLatLng().lat, currentMarker.getLatLng().lng), // Mevcut konum
+                    L.latLng(latitude, longitude) // Tıklanan konum
+                ],
+                routeWhileDragging: true,
+                lineOptions: { styles: [{ color: 'blue', weight: 4 }] }
+            }).addTo(map);
+
+            routingControl.on('routesfound', function (e) {
+                var summary = e.routes[0].summary;
+                document.getElementById('routeInfo').textContent = `Mesafe: ${(summary.totalDistance / 1000).toFixed(2)} km, Süre: ${(summary.totalTime / 60).toFixed(2)} dakika.`;
+            });
+        });
+    </script>
+</body>
+</html>
